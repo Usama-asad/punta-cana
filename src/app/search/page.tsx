@@ -45,11 +45,14 @@ function SearchResults() {
       setIsLoading(true);
 
       try {
+        console.log('try block start')
         const [roomsData, availableRoomIds] = await Promise.all([
           getRooms(),
           checkRoomAvailability({ from, to }),
         ]);
-
+        console.log('room data',roomsData)
+        console.log('room availability',availableRoomIds)
+        
         const filteredRooms = roomsData.filter((room) =>
           availableRoomIds.includes(room.id)
         );

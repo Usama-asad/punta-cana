@@ -111,6 +111,7 @@ export async function checkRoomAvailability({ from, to }: { from: string, to: st
     const allRooms = await getRooms();
     const availableRoomIds: string[] = [];
     const dateInterval = eachDayOfInterval({ start: fromDate, end: toDate }).slice(0, -1);
+    console.log('all rooms :',allRooms)
 
     // Fetch all potentially relevant reservations in one go.
     const reservationsSnap = await adminDb.collection('reservations')
@@ -150,8 +151,10 @@ export async function checkRoomAvailability({ from, to }: { from: string, to: st
         
         for (const day of dateInterval) {
             const dateKey = format(day, 'yyyy-MM-dd');
+            console.log('line 153 before rateSnap',room)
             const rateSnap = await adminDb.collection(`rates/${room.id}/calendar`).doc(dateKey).get();
-            
+            console.log('after rateSnap')
+
             let manualInventory = room.inventoryUnits || 1;
             let isClosed = false;
 
@@ -314,11 +317,15 @@ export async function getReservationsByRoomId(roomId: string): Promise<Reservati
 
 export async function saveRoom(roomData: Partial<Room>): Promise<{id: string}> {
     if (roomData.id) {
+        console.log('save rooms funtion room data id:',roomData.id)
         const { id, ...dataToUpdate } = roomData;
+        console.log('after save rooms funtion room data id:',{ id })
         await adminDb.collection('rooms').doc(id).set(dataToUpdate, { merge: true });
         return { id };
     } else {
         const docRef = await adminDb.collection('rooms').add(roomData);
+        await docRef.update({ id: docRef.id });
+        console.log('save rooms funtion docRef id:',docRef.id)
         return { id: docRef.id };
     }
 }

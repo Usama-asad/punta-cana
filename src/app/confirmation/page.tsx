@@ -46,7 +46,7 @@ import {
 import * as htmlToImage from "html-to-image";
 import GuestServicesCarousel from "@/components/guest-services-carousel";
 import { Suspense } from "react";
-import { getReservationById } from "@/app/server-actions.readonly";
+import { getReservationById } from "@/server-actions";
 import type { Reservation } from "@/lib/types";
 
 const PaymentSummary = ({ booking }: { booking: Reservation | null }) => {

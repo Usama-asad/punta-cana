@@ -159,6 +159,7 @@ export default function RoomEditor({ slug }: RoomEditorProps) {
           inventoryUnits: room.inventoryUnits || 1,
         };
         const { id } = await saveRoom(newRoomData);
+        console.log('save room data:',{ id })
         setRoom((prev) => ({ ...prev, id }));
         toast({
           title: "Success",
