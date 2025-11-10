@@ -1,7 +1,7 @@
 "use client";
 
 import * as React from "react";
-import { getReservations } from "@/app/server-actions.readonly";
+import { getReservations } from "@/server-actions";
 import {
   Card,
   CardContent,
@@ -75,6 +75,7 @@ export default function BookingsPage() {
     async function fetchReservations() {
       try {
         const resData = await getReservations();
+        console.log("Fetched Reservations:", resData);
         setReservations(resData);
       } catch (error) {
         console.error("Failed to fetch reservations:", error);

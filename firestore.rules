@@ -37,13 +37,16 @@ service cloud.firestore {
     // Anyone can create their own booking.
     // Reading/updating/deleting is restricted.
     match /reservations/{reservationId} {
-      allow create: if isSignedIn() && request.resource.data.guestUid == request.auth.uid;
-      allow read: if isStaff() || isOwner(resource.data.guestUid);
+      // allow create: if isSignedIn() && request.resource.data.guestUid == request.auth.uid;
+      allow create: if true
+      allow read: if true
+      // allow read: if isStaff() || isOwner(resource.data.guestUid);
       allow update, delete: if isStaff();
     }
 
     match /serviceBookings/{bookingId} {
-      allow create: if isSignedIn() && request.resource.data.guestUid == request.auth.uid;
+      allow create: if true
+      // allow create: if isSignedIn() && request.resource.data.guestUid == request.auth.uid;
       // allow read: if isStaff() || isOwner(resource.data.guestUid);
       allow read: if true;
       allow update, delete: if isStaff();
