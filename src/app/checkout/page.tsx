@@ -21,6 +21,7 @@ import Link from 'next/link';
 import { cn } from '@/lib/utils';
 import { useFirestore, useUser } from '@/firebase';
 import { collection, addDoc, serverTimestamp } from 'firebase/firestore';
+import {PayPalButtonsWrapper} from '@/components/PayPalButtonsWrapper';
 
 type TripType = 'none' | 'one-way' | 'round-trip';
 
@@ -157,6 +158,34 @@ const CheckoutSummary = ({ bookingDetails, pickupPrice, tripType, airline, fligh
   );
 };
 
+// Define the payload structure that will be sent to Firestore
+interface FinalBookingPayload {
+  type: 'room';
+  customer: { name: string; email: string; phone: string };
+  pricing: { totalUSD: number; currency: 'USD' };
+  dates: { checkIn: string; checkOut: string };
+  guests: number;
+  room: {
+    name: string;
+    ids: string[];
+  };
+  transfer: {
+    tripType: TripType;
+    price: number;
+    airline: string;
+    flightNumber: string;
+    arrivalDate: string | null;
+    returnDate: string | null;
+    returnFlightNumber: string;
+  } | null;
+  status: 'Pending Payment' | 'Confirmed';
+  createdAt: any; // serverTimestamp
+  updatedAt: any; // serverTimestamp
+  guestUid: string | null;
+  paypalOrderId?: string; // Optional PayPal order ID
+  paypalTransactionId?: string; // Optional PayPal transaction ID
+}
+
 function CheckoutPageComponent() {
   const router = useRouter();
   const firestore = useFirestore();
@@ -184,6 +213,11 @@ function CheckoutPageComponent() {
   const [isArrivalCalendarOpen, setIsArrivalCalendarOpen] = React.useState(false);
   const [isReturnCalendarOpen, setIsReturnCalendarOpen] = React.useState(false);
 
+  // PayPal related states
+  const [showPayPalButtons, setShowPayPalButtons] = React.useState(false);
+  const [bookingDetailsForPayment, setBookingDetailsForPayment] = React.useState<FinalBookingPayload | null>(null);
+
+
   React.useEffect(() => {
     const storedDetails = localStorage.getItem('bookingDetails');
     if (storedDetails) {
@@ -197,8 +231,9 @@ function CheckoutPageComponent() {
   }, []);
   
   const pickupPrice = tripType !== 'none' ? pickupPrices.puj[tripType] : 0;
-  
-  const handleConfirmBooking = async () => {
+  const finalPrice = bookingDetails ? bookingDetails.totalPrice + pickupPrice : 0;
+
+  const handleProceedToPayment = async () => {
     setInitError(null);
     if (!firstName || !lastName || !email || !termsAccepted) {
       toast({
@@ -218,9 +253,7 @@ function CheckoutPageComponent() {
 
     setIsProcessing(true);
     
-    const finalPrice = bookingDetails.totalPrice + pickupPrice;
-    
-    const bookingPayload = {
+    const initialBookingPayload: FinalBookingPayload = {
       type: 'room' as const,
       customer: { name: `${firstName} ${lastName}`, email, phone },
       pricing: { totalUSD: finalPrice, currency: 'USD' },
@@ -239,24 +272,76 @@ function CheckoutPageComponent() {
         returnDate: returnDate ? format(returnDate, 'yyyy-MM-dd') : null,
         returnFlightNumber: returnFlightNumber,
       } : null,
-       status: 'Confirmed',
+       status: 'Pending Payment', // Set initial status to pending
        createdAt: serverTimestamp(),
        updatedAt: serverTimestamp(),
-       guestUid: user?.uid ?? null, // Add the user's UID
+       guestUid: user?.uid ?? null,
+    };
+
+    // Store this payload temporarily for PayPal to use and for final database write
+    setBookingDetailsForPayment(initialBookingPayload);
+    setShowPayPalButtons(true);
+    setIsProcessing(false); // Done with initial processing, now waiting for PayPal interaction
+  };
+
+  const handlePaymentSuccess = async (paypalOrderId: string, paypalTransactionId: string) => {
+    if (!bookingDetailsForPayment || !firestore) {
+      toast({ title: "Error", description: "Payment successful, but booking details for finalization are missing.", variant: "destructive" });
+      setInitError({ message: "Payment successful, but booking details for finalization are missing." });
+      return;
+    }
+
+    setIsProcessing(true); // Indicate processing for database write
+
+    const finalBookingPayload = {
+      ...bookingDetailsForPayment,
+      paypalOrderId,
+      paypalTransactionId,
+      status: 'Confirmed' as const, // Update status to Confirmed
+      updatedAt: serverTimestamp(), // Update timestamp for confirmation
     };
 
     try {
-      const docRef = await addDoc(collection(firestore, "reservations"), bookingPayload);
+      const docRef = await addDoc(collection(firestore, "reservations"), finalBookingPayload);
+      toast({ title: "Booking Confirmed", description: "Your room booking has been successfully confirmed!", variant: "default" });
+      // Clear local storage and navigate
+      localStorage.removeItem('bookingDetails');
       router.push(`/confirmation?bid=${docRef.id}`);
     } catch (error: any) {
-        console.error("Booking failed:", error);
-        const errorMessage = error.message || "Could not create booking. Please try again.";
-        toast({ title: "Booking Failed", description: errorMessage, variant: "destructive" });
-        setInitError({ message: errorMessage, payload: bookingPayload });
+        console.error("Booking finalization failed:", error);
+        const errorMessage = error.message || "Could not finalize booking after payment. Please contact support.";
+        toast({ title: "Booking Finalization Failed", description: errorMessage, variant: "destructive" });
+        // It's critical here: payment was successful, but DB failed. Log this for manual intervention.
+        setInitError({ message: errorMessage, payload: finalBookingPayload });
     } finally {
         setIsProcessing(false);
+        setShowPayPalButtons(false);
+        setBookingDetailsForPayment(null);
     }
   };
+
+  const handlePaymentError = (error: any) => {
+    console.error("PayPal Payment Error:", error);
+    toast({
+      title: "Payment Error",
+      description: "There was an issue processing your payment. Please try again or contact support.",
+      variant: "destructive"
+    });
+    setShowPayPalButtons(false);
+    setBookingDetailsForPayment(null);
+    setIsProcessing(false);
+  };
+
+  const handlePaymentCancel = () => {
+    toast({
+        title: "Payment Cancelled",
+        description: "You have cancelled the PayPal payment process.",
+        variant: "default"
+    });
+    setShowPayPalButtons(false);
+    setBookingDetailsForPayment(null);
+    setIsProcessing(false);
+  }
   
   if (isLoading) {
     return (
@@ -435,9 +520,34 @@ function CheckoutPageComponent() {
                     </CardContent>
                 </Card>
 
-                <Button size="lg" className="w-full h-12" onClick={handleConfirmBooking} disabled={isProcessing}>
-                    {isProcessing ? <Loader2 className="animate-spin" /> : 'Confirm Booking'}
-                </Button>
+                {!showPayPalButtons ? (
+                  <Button size="lg" className="w-full h-12" onClick={handleProceedToPayment} disabled={isProcessing}>
+                      {isProcessing ? <Loader2 className="animate-spin" /> : 'Proceed to Payment'}
+                  </Button>
+                ) : (
+                  <>
+                    {finalPrice > 0 && bookingDetailsForPayment && ( // Only show PayPal if price is greater than 0
+                      <PayPalButtonsWrapper
+                        amount={finalPrice.toFixed(2)}
+                        currency="USD" // Your documented currency
+                        onPaymentSuccess={handlePaymentSuccess}
+                        onPaymentError={handlePaymentError}
+                        onPaymentCancel={handlePaymentCancel}
+                      />
+                    )}
+                    {finalPrice === 0 && ( // Handle free bookings if applicable
+                        <Button size="lg" className="w-full h-12" onClick={handlePaymentSuccess} disabled={isProcessing}>
+                            {isProcessing ? <Loader2 className="animate-spin" /> : 'Confirm Free Booking'}
+                        </Button>
+                    )}
+                    {/* Optional: Add a 'Cancel Payment' button to go back to the form */}
+                    <Button variant="outline" className="w-full h-12 mt-2" onClick={() => setShowPayPalButtons(false)} disabled={isProcessing}>
+                        Cancel Payment
+                    </Button>
+                  </>
+                )}
+
+
                {initError && (
                     <Card className="mt-4 bg-destructive/10 border-destructive">
                       <CardHeader>
@@ -473,7 +583,6 @@ function CheckoutPageComponent() {
       </div>
   );
 }
-
 
 export default function CheckoutPage() {
     const [isClient, setIsClient] = React.useState(false);

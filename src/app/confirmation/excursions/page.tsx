@@ -46,7 +46,7 @@ import { toPng } from "html-to-image";
 import {
   getServiceBookingById,
   getExcursionById,
-} from "@/app/server-actions.readonly";
+} from "@/server-actions";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Suspense } from "react";
 

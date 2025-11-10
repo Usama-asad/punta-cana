@@ -238,18 +238,20 @@ export async function getReservationById(id: string): Promise<Reservation | null
 
     const normalizedReservation: Reservation = {
         id: docSnap.id,
-        guestName: data.guestName,
-        guestEmail: data.guestEmail,
-        checkInDate: data.checkInDate,
-        checkOutDate: data.checkOutDate,
-        roomName: data.roomName,
-        roomId: data.roomId,
-        numberOfGuests: data.numberOfGuests,
-        totalPrice: data.totalPrice,
+        guestName: data.customer.name,
+        guestEmail: data.customer.email,
+        checkInDate: data.dates.checkIn,
+        checkOutDate: data.dates.checkOut,
+        roomName: data.room.name,
+        roomId: data.room.ids,
+        numberOfGuests: data.guests,
+        totalPrice: data.pricing.totalUSD,
         status: 'Confirmed',
         createdAt: (data.createdAt as Timestamp)?.toDate().toISOString() || new Date().toISOString(),
         transfer: data.transfer || null,
     };
+    // console.log("Raw Reservation Data:", data);
+    // console.log("Normalized Reservation:", normalizedReservation);
 
     return normalizedReservation;
 }

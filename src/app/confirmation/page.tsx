@@ -259,6 +259,7 @@ function ConfirmationContent() {
       </div>
     );
   }
+  // console.log("Booking Details:", booking.checkInDate, booking.checkOutDate);
 
   const fromDate = parseISO(booking.checkInDate);
   const toDate = parseISO(booking.checkOutDate);
